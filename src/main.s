@@ -1,10 +1,10 @@
 .segment "HEADER"
-.byte "N", "E", "S", $1A
-.byte $02
-.byte $01
-.byte $00
-.byte $00
-.byte $00,$00,$00,$00,$00,$00,$00,$00
+    .byte "N", "E", "S", $1A
+    .byte $02
+    .byte $01
+    .byte $00
+    .byte $00
+    .byte $00, $00, $00, $00, $00, $00, $00, $00
 
 .segment "ZEROPAGE"
 frame_ready: .res 1
@@ -18,70 +18,105 @@ frame_ready: .res 1
     ldx #$40
     stx $4017
 
-    ldx #$ff
+    ldx #$FF
     txs
 
-    inx
+    ldx #$00
     stx $2000
     stx $2001
     stx $4010
 
-; wait for first vblank
-vblankwait1:
     bit $2002
-    bpl vblankwait1
 
-; set palette at $3F00
-    lda #$3F
-    sta $2006
+WaitVBlank1:
+    bit $2002
+    bpl WaitVBlank1
+
+WaitVBlank2:
+    bit $2002
+    bpl WaitVBlank2
+
     lda #$00
-    sta $2006
+    sta frame_ready
 
-; universal background color
-    lda #$01
-    sta $2007
+    lda #$FE
+    ldx #$00
+ClearOAM:
+    sta $0200, x
+    inx
+    bne ClearOAM
 
-; sprite palette 0
-    lda #$0F
-    sta $2007
-    lda #$16
-    sta $2007
-    lda #$27
-    sta $2007
-    lda #$38
-    sta $2007
-
-; set up sprite in CPU RAM at $0200
-    lda #120      ; Y
+    lda #120
     sta $0200
-    lda #$00      ; tile index
+    lda #$01
     sta $0201
-    lda #$00      ; attributes
+    lda #$00
     sta $0202
-    lda #120      ; X
+    lda #120
     sta $0203
 
-; hide rest of sprites
-    ldx #$04
-ClearSprites:
-    lda #$FE
-    sta $0200,x
-    inx
-    bne ClearSprites
+    jsr LoadPalettes
+    jsr ClearNametable0
 
-; enable NMI, background, sprites
+    lda #$00
+    sta $2005
+    sta $2005
+
     lda #%10000000
     sta $2000
 
     lda #%00011000
     sta $2001
 
-Forever:
+MainLoop:
     lda frame_ready
-    beq Forever
-    lda #0
+    beq MainLoop
+    lda #$00
     sta frame_ready
-    jmp Forever
+    jmp MainLoop
+.endproc
+
+.proc LoadPalettes
+    bit $2002
+    lda #$3F
+    sta $2006
+    lda #$00
+    sta $2006
+
+    ldx #$00
+LoadPaletteLoop:
+    lda PaletteData, x
+    sta $2007
+    inx
+    cpx #$20
+    bne LoadPaletteLoop
+    rts
+.endproc
+
+.proc ClearNametable0
+    bit $2002
+    lda #$20
+    sta $2006
+    lda #$00
+    sta $2006
+
+    lda #$00
+    ldx #$04
+ClearNTPages:
+    ldy #$00
+ClearNTRow:
+    sta $2007
+    iny
+    bne ClearNTRow
+    dex
+    bne ClearNTPages
+
+    ldx #$40
+ClearAttr:
+    sta $2007
+    dex
+    bne ClearAttr
+    rts
 .endproc
 
 .proc NMI
@@ -99,29 +134,55 @@ Forever:
     rti
 .endproc
 
+PaletteData:
+    .byte $21, $00, $10, $20
+    .byte $0F, $16, $27, $30
+    .byte $0F, $0F, $0F, $0F
+    .byte $0F, $0F, $0F, $0F
+    .byte $21, $0F, $0F, $0F
+    .byte $0F, $0F, $0F, $0F
+    .byte $0F, $0F, $0F, $0F
+    .byte $0F, $0F, $0F, $0F
+
 .segment "VECTORS"
-.word NMI
-.word Reset
-.word IRQ
+    .word NMI
+    .word Reset
+    .word IRQ
 
 .segment "CHR"
-; tile 0 = simple 8x8 ship-ish block
-.byte %00011000
-.byte %00111100
-.byte %01111110
-.byte %11111111
-.byte %11111111
-.byte %01111110
-.byte %00111100
-.byte %00011000
 
-.byte %00011000
-.byte %00111100
-.byte %01111110
-.byte %11111111
-.byte %11111111
-.byte %01111110
-.byte %00111100
-.byte %00011000
+    .byte %00000000
+    .byte %00000000
+    .byte %00000000
+    .byte %00000000
+    .byte %00000000
+    .byte %00000000
+    .byte %00000000
+    .byte %00000000
+    .byte %00000000
+    .byte %00000000
+    .byte %00000000
+    .byte %00000000
+    .byte %00000000
+    .byte %00000000
+    .byte %00000000
+    .byte %00000000
 
-.res $2000 - 16
+    .byte %00011000
+    .byte %00111100
+    .byte %01111110
+    .byte %11111111
+    .byte %11111111
+    .byte %01111110
+    .byte %00100100
+    .byte %01000010
+    .byte %00000000
+    .byte %00000000
+    .byte %00000000
+    .byte %00000000
+    .byte %00000000
+    .byte %00000000
+    .byte %00000000
+    .byte %00000000
+
+    .res $2000 - 32
