@@ -8,6 +8,7 @@
 
 .segment "ZEROPAGE"
 frame_ready: .res 1
+buttons:    .res 1
 
 .segment "CODE"
 
@@ -38,6 +39,7 @@ WaitVBlank2:
 
     lda #$00
     sta frame_ready
+    sta buttons
 
     lda #$FE
     ldx #$00
@@ -73,7 +75,51 @@ MainLoop:
     beq MainLoop
     lda #$00
     sta frame_ready
+
+    lda buttons
+    and #%00000010
+    beq CheckRight
+
+    lda $0203
+    cmp #8
+    beq CheckRight
+    sec
+    sbc #1
+    sta $0203
+
+CheckRight:
+    lda buttons
+    and #%00000001
+    beq MainLoop
+
+    lda $0203
+    cmp #240
+    beq MainLoop
+    clc
+    adc #1
+    sta $0203
+
     jmp MainLoop
+.endproc
+
+.proc ReadController1
+    lda #$01
+    sta $4016
+    lda #$00
+    sta $4016
+
+    lda #$00
+    sta buttons
+
+    ldx #$08
+ReadButtonsLoop:
+    lda $4016
+    and #$01
+    lsr a
+    rol buttons
+    dex
+    bne ReadButtonsLoop
+    rts
 .endproc
 
 .proc LoadPalettes
@@ -120,6 +166,8 @@ ClearAttr:
 .endproc
 
 .proc NMI
+    jsr ReadController1
+
     lda #$00
     sta $2003
     lda #$02
