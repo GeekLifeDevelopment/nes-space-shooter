@@ -9,6 +9,9 @@
 .segment "ZEROPAGE"
 frame_ready: .res 1
 buttons:    .res 1
+bullet_active: .res 1
+bullet_x:      .res 1
+bullet_y:      .res 1
 
 .segment "CODE"
 
@@ -40,6 +43,9 @@ WaitVBlank2:
     lda #$00
     sta frame_ready
     sta buttons
+    sta bullet_active
+    sta bullet_x
+    sta bullet_y
 
     lda #$FE
     ldx #$00
@@ -90,14 +96,58 @@ MainLoop:
 CheckRight:
     lda buttons
     and #%00000001
-    beq MainLoop
+    beq CheckFire
 
     lda $0203
     cmp #240
-    beq MainLoop
+    beq CheckFire
     clc
     adc #1
     sta $0203
+
+CheckFire:
+    lda buttons
+    and #%10000000
+    beq UpdateBullet
+
+    lda bullet_active
+    bne UpdateBullet
+
+    lda #$01
+    sta bullet_active
+    lda $0203
+    sta bullet_x
+    lda $0200
+    sta bullet_y
+
+UpdateBullet:
+    lda bullet_active
+    beq HideBullet
+
+    lda bullet_y
+    sec
+    sbc #2
+    sta bullet_y
+    cmp #8
+    bcs DrawBullet
+
+    lda #$00
+    sta bullet_active
+    jmp HideBullet
+
+DrawBullet:
+    sta $0204
+    lda #$01
+    sta $0205
+    lda #$00
+    sta $0206
+    lda bullet_x
+    sta $0207
+    jmp MainLoop
+
+HideBullet:
+    lda #$FE
+    sta $0204
 
     jmp MainLoop
 .endproc
