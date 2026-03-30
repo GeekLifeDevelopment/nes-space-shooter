@@ -7,11 +7,14 @@
     .byte $00, $00, $00, $00, $00, $00, $00, $00
 
 .segment "ZEROPAGE"
-frame_ready: .res 1
-buttons:    .res 1
-bullet_active: .res 1
-bullet_x:      .res 1
-bullet_y:      .res 1
+frame_ready:  .res 1
+buttons:      .res 1
+bullet_active:.res 1
+bullet_x:     .res 1
+bullet_y:     .res 1
+enemy_active: .res 1
+enemy_x:      .res 1
+enemy_y:      .res 1
 
 .segment "CODE"
 
@@ -46,6 +49,16 @@ WaitVBlank2:
     sta bullet_active
     sta bullet_x
     sta bullet_y
+    sta enemy_active
+    sta enemy_x
+    sta enemy_y
+
+    lda #$01
+    sta enemy_active
+    lda #80
+    sta enemy_x
+    lda #24
+    sta enemy_y
 
     lda #$FE
     ldx #$00
@@ -62,6 +75,15 @@ ClearOAM:
     sta $0202
     lda #120
     sta $0203
+
+    lda #24
+    sta $0208
+    lda #$02
+    sta $0209
+    lda #$00
+    sta $020A
+    lda #80
+    sta $020B
 
     jsr LoadPalettes
     jsr ClearNametable0
@@ -143,12 +165,85 @@ DrawBullet:
     sta $0206
     lda bullet_x
     sta $0207
-    jmp MainLoop
+    jmp UpdateEnemy
 
 HideBullet:
     lda #$FE
     sta $0204
 
+UpdateEnemy:
+    lda enemy_active
+    beq HideEnemy
+
+    lda enemy_y
+    clc
+    adc #1
+    sta enemy_y
+    cmp #232
+    bcc CheckCollision
+
+    lda #24
+    sta enemy_y
+    lda #80
+    sta enemy_x
+
+CheckCollision:
+    lda bullet_active
+    beq DrawEnemy
+    lda enemy_active
+    beq DrawEnemy
+
+    lda bullet_x
+    clc
+    adc #7
+    cmp enemy_x
+    bcc DrawEnemy
+
+    lda enemy_x
+    clc
+    adc #7
+    cmp bullet_x
+    bcc DrawEnemy
+
+    lda bullet_y
+    clc
+    adc #7
+    cmp enemy_y
+    bcc DrawEnemy
+
+    lda enemy_y
+    clc
+    adc #7
+    cmp bullet_y
+    bcc DrawEnemy
+
+    lda #$00
+    sta bullet_active
+    lda #$FE
+    sta $0204
+
+    lda #24
+    sta enemy_y
+    lda #80
+    sta enemy_x
+
+DrawEnemy:
+    lda enemy_active
+    beq HideEnemy
+
+    lda enemy_y
+    sta $0208
+    lda #$02
+    sta $0209
+    lda #$00
+    sta $020A
+    lda enemy_x
+    sta $020B
+    jmp MainLoop
+
+HideEnemy:
+    lda #$FE
+    sta $0208
     jmp MainLoop
 .endproc
 
@@ -238,7 +333,7 @@ PaletteData:
     .byte $0F, $0F, $0F, $0F
     .byte $0F, $0F, $0F, $0F
     .byte $21, $0F, $0F, $0F
-    .byte $0F, $0F, $0F, $0F
+    .byte $21, $0F, $0F, $0F
     .byte $0F, $0F, $0F, $0F
     .byte $0F, $0F, $0F, $0F
 
@@ -283,4 +378,38 @@ PaletteData:
     .byte %00000000
     .byte %00000000
 
-    .res $2000 - 32
+    .byte %10000001
+    .byte %01000010
+    .byte %00100100
+    .byte %00011000
+    .byte %00011000
+    .byte %00100100
+    .byte %01000010
+    .byte %10000001
+    .byte %00000000
+    .byte %00000000
+    .byte %00000000
+    .byte %00000000
+    .byte %00000000
+    .byte %00000000
+    .byte %00000000
+    .byte %00000000
+
+    .byte %00011000
+    .byte %00111100
+    .byte %01111110
+    .byte %11111111
+    .byte %11111111
+    .byte %01111110
+    .byte %00111100
+    .byte %00011000
+    .byte %00000000
+    .byte %00000000
+    .byte %00000000
+    .byte %00000000
+    .byte %00000000
+    .byte %00000000
+    .byte %00000000
+    .byte %00000000
+
+    .res $2000 - 64
