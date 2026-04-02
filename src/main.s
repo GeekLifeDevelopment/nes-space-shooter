@@ -12,9 +12,9 @@ buttons:      .res 1
 bullet_active:.res 1
 bullet_x:     .res 1
 bullet_y:     .res 1
-enemy_active: .res 1
-enemy_x:      .res 1
-enemy_y:      .res 1
+enemy_active: .res 3
+enemy_x:      .res 3
+enemy_y:      .res 3
 lives:        .res 1
 player_hit:   .res 1
 hit_cooldown: .res 1
@@ -57,22 +57,21 @@ WaitVBlank2:
     sta bullet_active
     sta bullet_x
     sta bullet_y
-    sta enemy_active
-    sta enemy_x
-    sta enemy_y
     sta player_hit
     sta hit_cooldown
     sta game_state
 
+    ldx #$00
+ClearEnemyState:
+    sta enemy_active, x
+    sta enemy_x, x
+    sta enemy_y, x
+    inx
+    cpx #$03
+    bne ClearEnemyState
+
     lda #$03
     sta lives
-
-    lda #$01
-    sta enemy_active
-    lda #80
-    sta enemy_x
-    lda #24
-    sta enemy_y
 
     lda #$FE
     ldx #$00
@@ -90,14 +89,8 @@ ClearOAM:
     lda #120
     sta $0203
 
-    lda #24
-    sta $0208
-    lda #$02
-    sta $0209
-    lda #$00
-    sta $020A
-    lda #80
-    sta $020B
+    jsr InitEnemies
+    jsr DrawEnemies
 
     jsr LoadPalettes
     jsr ClearNametable0
@@ -162,20 +155,8 @@ StartGame:
     lda #120
     sta bullet_y
 
-    lda #$01
-    sta enemy_active
-    lda #24
-    sta enemy_y
-    lda #80
-    sta enemy_x
-    lda #24
-    sta $0208
-    lda #$02
-    sta $0209
-    lda #$00
-    sta $020A
-    lda #80
-    sta $020B
+    jsr InitEnemies
+    jsr DrawEnemies
     jmp MainLoop
 
 PlayingState:
@@ -252,96 +233,9 @@ HideBullet:
     sta $0204
 
 UpdateEnemy:
-    lda enemy_active
-    bne EnemyActive
-    jmp HideEnemy
-
-EnemyActive:
-    lda enemy_y
-    clc
-    adc #1
-    sta enemy_y
-    cmp #232
-    bcc CheckCollision
-
-    lda #24
-    sta enemy_y
-    lda #80
-    sta enemy_x
-
-CheckCollision:
-    lda bullet_active
-    beq CheckPlayerCollision
-    lda enemy_active
-    beq CheckPlayerCollision
-
-    lda bullet_x
-    clc
-    adc #7
-    cmp enemy_x
-    bcc CheckPlayerCollision
-
-    lda enemy_x
-    clc
-    adc #7
-    cmp bullet_x
-    bcc CheckPlayerCollision
-
-    lda bullet_y
-    clc
-    adc #7
-    cmp enemy_y
-    bcc CheckPlayerCollision
-
-    lda enemy_y
-    clc
-    adc #7
-    cmp bullet_y
-    bcc CheckPlayerCollision
-
-    lda #$00
-    sta bullet_active
-    lda #$FE
-    sta $0204
-
-    lda #24
-    sta enemy_y
-    lda #80
-    sta enemy_x
-
-CheckPlayerCollision:
-    lda hit_cooldown
-    bne NoPlayerCollision
-
-    lda enemy_active
-    beq NoPlayerCollision
-
-    lda $0203
-    clc
-    adc #7
-    cmp enemy_x
-    bcc NoPlayerCollision
-
-    lda enemy_x
-    clc
-    adc #7
-    cmp $0203
-    bcc NoPlayerCollision
-
-    lda $0200
-    clc
-    adc #7
-    cmp enemy_y
-    bcc NoPlayerCollision
-
-    lda enemy_y
-    clc
-    adc #7
-    cmp $0200
-    bcc NoPlayerCollision
-
-    lda #$01
-    sta player_hit
+    jsr UpdateEnemies
+    jsr CheckBulletEnemyCollision
+    jsr CheckPlayerEnemyCollision
 
 NoPlayerCollision:
 HandlePlayerHit:
@@ -369,12 +263,7 @@ FinishHitReset:
     sta $0203
     sta bullet_x
 
-    lda #24
-    sta enemy_y
-    lda #80
-    sta enemy_x
-    lda #$01
-    sta enemy_active
+    jsr InitEnemies
 
     lda #60
     sta hit_cooldown
@@ -382,17 +271,7 @@ FinishHitReset:
 NoHitReset:
 
 DrawEnemy:
-    lda enemy_active
-    beq HideEnemy
-
-    lda enemy_y
-    sta $0208
-    lda #$02
-    sta $0209
-    lda #$00
-    sta $020A
-    lda enemy_x
-    sta $020B
+    jsr DrawEnemies
     jmp MainLoop
 
 SetGameOver:
@@ -401,11 +280,182 @@ SetGameOver:
     lda #GAME_OVER_STATE
     sta game_state
     jmp DrawEnemy
+.endproc
 
-HideEnemy:
+EnemySpawnX:
+    .byte 40, 120, 200
+
+EnemySpawnY:
+    .byte 24, 48, 72
+
+EnemyOAMBase:
+    .byte $08, $0C, $10
+
+.proc RespawnEnemy
+    lda #$01
+    sta enemy_active, x
+    lda EnemySpawnX, x
+    sta enemy_x, x
+    lda EnemySpawnY, x
+    sta enemy_y, x
+    rts
+.endproc
+
+.proc InitEnemies
+    ldx #$00
+InitEnemiesLoop:
+    jsr RespawnEnemy
+    inx
+    cpx #$03
+    bne InitEnemiesLoop
+    rts
+.endproc
+
+.proc UpdateEnemies
+    ldx #$00
+UpdateEnemiesLoop:
+    lda enemy_active, x
+    beq UpdateEnemiesNext
+
+    lda enemy_y, x
+    clc
+    adc #1
+    sta enemy_y, x
+    cmp #232
+    bcc UpdateEnemiesNext
+
+    jsr RespawnEnemy
+
+UpdateEnemiesNext:
+    inx
+    cpx #$03
+    bne UpdateEnemiesLoop
+    rts
+.endproc
+
+.proc CheckBulletEnemyCollision
+    lda bullet_active
+    beq BulletCollisionDone
+
+    ldx #$00
+BulletCheckLoop:
+    lda enemy_active, x
+    beq BulletCheckNext
+
+    lda bullet_x
+    clc
+    adc #7
+    cmp enemy_x, x
+    bcc BulletCheckNext
+
+    lda enemy_x, x
+    clc
+    adc #7
+    cmp bullet_x
+    bcc BulletCheckNext
+
+    lda bullet_y
+    clc
+    adc #7
+    cmp enemy_y, x
+    bcc BulletCheckNext
+
+    lda enemy_y, x
+    clc
+    adc #7
+    cmp bullet_y
+    bcc BulletCheckNext
+
+    lda #$00
+    sta bullet_active
     lda #$FE
-    sta $0208
-    jmp MainLoop
+    sta $0204
+    jsr RespawnEnemy
+    rts
+
+BulletCheckNext:
+    inx
+    cpx #$03
+    bne BulletCheckLoop
+
+BulletCollisionDone:
+    rts
+.endproc
+
+.proc CheckPlayerEnemyCollision
+    lda hit_cooldown
+    bne PlayerCollisionDone
+
+    ldx #$00
+PlayerCheckLoop:
+    lda enemy_active, x
+    beq PlayerCheckNext
+
+    lda $0203
+    clc
+    adc #7
+    cmp enemy_x, x
+    bcc PlayerCheckNext
+
+    lda enemy_x, x
+    clc
+    adc #7
+    cmp $0203
+    bcc PlayerCheckNext
+
+    lda $0200
+    clc
+    adc #7
+    cmp enemy_y, x
+    bcc PlayerCheckNext
+
+    lda enemy_y, x
+    clc
+    adc #7
+    cmp $0200
+    bcc PlayerCheckNext
+
+    lda #$01
+    sta player_hit
+    rts
+
+PlayerCheckNext:
+    inx
+    cpx #$03
+    bne PlayerCheckLoop
+
+PlayerCollisionDone:
+    rts
+.endproc
+
+.proc DrawEnemies
+    ldx #$00
+DrawEnemyLoop:
+    lda EnemyOAMBase, x
+    tay
+
+    lda enemy_active, x
+    bne DrawEnemySprite
+
+    lda #$FE
+    sta $0200, y
+    jmp DrawEnemyNext
+
+DrawEnemySprite:
+    lda enemy_y, x
+    sta $0200, y
+    lda #$02
+    sta $0201, y
+    lda #$00
+    sta $0202, y
+    lda enemy_x, x
+    sta $0203, y
+
+DrawEnemyNext:
+    inx
+    cpx #$03
+    bne DrawEnemyLoop
+    rts
 .endproc
 
 .proc ReadController1
