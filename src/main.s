@@ -15,6 +15,9 @@ bullet_y:     .res 1
 enemy_active: .res 1
 enemy_x:      .res 1
 enemy_y:      .res 1
+lives:        .res 1
+player_hit:   .res 1
+hit_cooldown: .res 1
 
 .segment "CODE"
 
@@ -52,6 +55,11 @@ WaitVBlank2:
     sta enemy_active
     sta enemy_x
     sta enemy_y
+    sta player_hit
+    sta hit_cooldown
+
+    lda #$03
+    sta lives
 
     lda #$01
     sta enemy_active
@@ -104,6 +112,14 @@ MainLoop:
     lda #$00
     sta frame_ready
 
+    lda lives
+    beq MainLoop
+
+    lda hit_cooldown
+    beq CheckLeft
+    dec hit_cooldown
+
+CheckLeft:
     lda buttons
     and #%00000010
     beq CheckRight
@@ -173,8 +189,10 @@ HideBullet:
 
 UpdateEnemy:
     lda enemy_active
-    beq HideEnemy
+    bne EnemyActive
+    jmp HideEnemy
 
+EnemyActive:
     lda enemy_y
     clc
     adc #1
@@ -189,33 +207,33 @@ UpdateEnemy:
 
 CheckCollision:
     lda bullet_active
-    beq DrawEnemy
+    beq CheckPlayerCollision
     lda enemy_active
-    beq DrawEnemy
+    beq CheckPlayerCollision
 
     lda bullet_x
     clc
     adc #7
     cmp enemy_x
-    bcc DrawEnemy
+    bcc CheckPlayerCollision
 
     lda enemy_x
     clc
     adc #7
     cmp bullet_x
-    bcc DrawEnemy
+    bcc CheckPlayerCollision
 
     lda bullet_y
     clc
     adc #7
     cmp enemy_y
-    bcc DrawEnemy
+    bcc CheckPlayerCollision
 
     lda enemy_y
     clc
     adc #7
     cmp bullet_y
-    bcc DrawEnemy
+    bcc CheckPlayerCollision
 
     lda #$00
     sta bullet_active
@@ -226,6 +244,77 @@ CheckCollision:
     sta enemy_y
     lda #80
     sta enemy_x
+
+CheckPlayerCollision:
+    lda hit_cooldown
+    bne NoPlayerCollision
+
+    lda enemy_active
+    beq NoPlayerCollision
+
+    lda $0203
+    clc
+    adc #7
+    cmp enemy_x
+    bcc NoPlayerCollision
+
+    lda enemy_x
+    clc
+    adc #7
+    cmp $0203
+    bcc NoPlayerCollision
+
+    lda $0200
+    clc
+    adc #7
+    cmp enemy_y
+    bcc NoPlayerCollision
+
+    lda enemy_y
+    clc
+    adc #7
+    cmp $0200
+    bcc NoPlayerCollision
+
+    lda #$01
+    sta player_hit
+
+NoPlayerCollision:
+HandlePlayerHit:
+    lda player_hit
+    beq NoHitReset
+
+    lda lives
+    beq FinishHitReset
+    sec
+    sbc #1
+    sta lives
+
+FinishHitReset:
+    lda #$00
+    sta bullet_active
+    sta player_hit
+    lda #$FE
+    sta $0204
+
+    lda #120
+    sta $0200
+    sta bullet_y
+    lda #120
+    sta $0203
+    sta bullet_x
+
+    lda #24
+    sta enemy_y
+    lda #80
+    sta enemy_x
+    lda #$01
+    sta enemy_active
+
+    lda #60
+    sta hit_cooldown
+
+NoHitReset:
 
 DrawEnemy:
     lda enemy_active
