@@ -18,8 +18,13 @@ enemy_y:      .res 1
 lives:        .res 1
 player_hit:   .res 1
 hit_cooldown: .res 1
+game_state:   .res 1
 
 .segment "CODE"
+
+START_STATE   = $00
+PLAYING_STATE = $01
+GAME_OVER_STATE = $02
 
 .proc Reset
     sei
@@ -57,6 +62,7 @@ WaitVBlank2:
     sta enemy_y
     sta player_hit
     sta hit_cooldown
+    sta game_state
 
     lda #$03
     sta lives
@@ -112,9 +118,67 @@ MainLoop:
     lda #$00
     sta frame_ready
 
-    lda lives
+    lda game_state
+    cmp #PLAYING_STATE
+    beq PlayingState
+    cmp #START_STATE
+    beq StartState
+
+GameOverState:
+    lda buttons
+    and #%00010000
+    beq MainLoop
+    jmp StartGame
+
+StartState:
+    lda buttons
+    and #%00010000
     beq MainLoop
 
+StartGame:
+    lda #$03
+    sta lives
+
+    lda #$00
+    sta bullet_active
+    sta player_hit
+    sta hit_cooldown
+
+    lda #PLAYING_STATE
+    sta game_state
+
+    lda #$FE
+    sta $0204
+
+    lda #120
+    sta $0200
+    lda #$01
+    sta $0201
+    lda #$00
+    sta $0202
+    lda #120
+    sta $0203
+    sta bullet_x
+    lda #120
+    sta bullet_y
+
+    lda #$01
+    sta enemy_active
+    lda #24
+    sta enemy_y
+    lda #80
+    sta enemy_x
+    lda #24
+    sta $0208
+    lda #$02
+    sta $0209
+    lda #$00
+    sta $020A
+    lda #80
+    sta $020B
+    jmp MainLoop
+
+PlayingState:
     lda hit_cooldown
     beq CheckLeft
     dec hit_cooldown
@@ -285,10 +349,11 @@ HandlePlayerHit:
     beq NoHitReset
 
     lda lives
-    beq FinishHitReset
+    beq NoHitReset
     sec
     sbc #1
     sta lives
+    beq SetGameOver
 
 FinishHitReset:
     lda #$00
@@ -329,6 +394,13 @@ DrawEnemy:
     lda enemy_x
     sta $020B
     jmp MainLoop
+
+SetGameOver:
+    lda #$00
+    sta player_hit
+    lda #GAME_OVER_STATE
+    sta game_state
+    jmp DrawEnemy
 
 HideEnemy:
     lda #$FE
